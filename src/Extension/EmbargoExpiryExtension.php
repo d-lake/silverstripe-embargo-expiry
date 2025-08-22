@@ -3,17 +3,17 @@
 namespace Terraformers\EmbargoExpiry\Extension;
 
 use DateTimeImmutable;
+use SilverStripe\Core\Extension;
 use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Core\Validation\ValidationResult;
 use SilverStripe\Forms\DatetimeField;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\FormAction;
 use SilverStripe\Forms\HeaderField;
 use SilverStripe\Forms\LiteralField;
 use SilverStripe\Forms\ReadonlyField;
-use SilverStripe\ORM\DataExtension;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\ORM\FieldType\DBDatetime;
-use SilverStripe\ORM\ValidationResult;
 use SilverStripe\Security\Member;
 use SilverStripe\Security\Permission;
 use SilverStripe\Security\PermissionProvider;
@@ -36,7 +36,7 @@ use Terraformers\EmbargoExpiry\Job\UnPublishTargetJob;
  * @method QueuedJobDescriptor PublishJob()
  * @method QueuedJobDescriptor UnPublishJob()
  */
-class EmbargoExpiryExtension extends DataExtension implements PermissionProvider
+class EmbargoExpiryExtension extends Extension implements PermissionProvider
 {
     public const PERMISSION_ADD = 'AddEmbargoExpiry';
     public const PERMISSION_REMOVE = 'RemoveEmbargoExpiry';
@@ -77,6 +77,10 @@ class EmbargoExpiryExtension extends DataExtension implements PermissionProvider
         $fields->removeByName([
             'PublishJobID',
             'UnPublishJobID',
+            'DesiredPublishDate',
+            'DesiredUnPublishDate',
+            'PublishOnDate',
+            'UnPublishOnDate'
         ]);
 
         $this->addNoticeOrWarningFields($fields);
@@ -87,7 +91,7 @@ class EmbargoExpiryExtension extends DataExtension implements PermissionProvider
     /**
      * If this Object requires sequential embargo/expiry dates, then let's make sure it has that.
      */
-    public function validate(ValidationResult $validationResult): ValidationResult
+    public function updateValidate(ValidationResult $validationResult): ValidationResult
     {
         // We don't require sequential dates.
         if (!$this->owner->config()->get('enforce_sequential_dates')) {
@@ -208,9 +212,6 @@ class EmbargoExpiryExtension extends DataExtension implements PermissionProvider
             return;
         }
 
-        // @todo need to move these into badges so that we don't have to remove these messages.
-        unset($flags['addedtodraft'], $flags['modified']);
-
         if ($embargo && $expiry) {
             $flags['embargo_expiry'] = [
                 'text' => _t(self::class . '.BADGE_PUBLISH_UNPUBLISH', 'Embargo+Expiry'),
@@ -268,7 +269,19 @@ class EmbargoExpiryExtension extends DataExtension implements PermissionProvider
      */
     public function canPublish($member = null): ?bool
     {
-        return $this->owner->isEditable();
+        // If the user can’t edit, they can’t publish either
+        $canEdit = $this->owner->canEdit($member);
+        if ($canEdit === false) {
+            return false;
+        }
+
+        // If the user can edit, allow immediate publish (matches common Versioned behaviour)
+        if ($canEdit === true) {
+            return true;
+        }
+
+        // Only in edge cases where canEdit() returns null, defer to core
+        return null;
     }
 
     /**

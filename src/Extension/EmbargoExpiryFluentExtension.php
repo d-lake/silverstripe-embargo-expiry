@@ -3,11 +3,11 @@
 namespace Terraformers\EmbargoExpiry\Extension;
 
 use Exception;
-use Opis\Closure\SerializableClosure;
-use SilverStripe\ORM\DataExtension;
+use SilverStripe\Core\Extension;
 use TractorCow\Fluent\State\FluentState;
+use function Opis\Closure\serialize as o_serialize;
 
-class EmbargoExpiryFluentExtension extends DataExtension
+class EmbargoExpiryFluentExtension extends Extension
 {
     /**
      * Fluent specific configuration
@@ -40,10 +40,8 @@ class EmbargoExpiryFluentExtension extends DataExtension
         // Locale isn't currently used in our Job, but if you subclass, you might find it useful for something.
         $options['locale'] = $locale;
 
-        // Before we fetch our DataObject in the Job, we must have the request Locale set to our FluentState. Otherwise
-        // you'll end up pulling the *base* record (EG: from SiteTree instead of SiteTree_Localised), and you'll also
-        // publish/un-publish the *base* record.
-        $options['onBeforeGetObject'] = new SerializableClosure(static function () use ($locale): void {
+        // For opis/closure v4: store a serialized Closure string that restores the desired Fluent locale
+        $options['onBeforeGetObject'] = o_serialize(static function () use ($locale): void {
             FluentState::singleton()->setLocale($locale);
         });
     }

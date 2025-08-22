@@ -7,13 +7,13 @@ use Exception;
 use Page;
 use SilverStripe\CMS\Model\SiteTree;
 use SilverStripe\Core\Config\Config;
+use SilverStripe\Core\Validation\ValidationException;
+use SilverStripe\Core\Validation\ValidationResult;
 use SilverStripe\Dev\SapphireTest;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\LiteralField;
 use SilverStripe\Forms\TabSet;
 use SilverStripe\ORM\FieldType\DBDatetime;
-use SilverStripe\ORM\ValidationException;
-use SilverStripe\ORM\ValidationResult;
 use Symbiote\QueuedJobs\Services\QueuedJobService;
 use Terraformers\EmbargoExpiry\Extension\EmbargoExpiryExtension;
 use Terraformers\EmbargoExpiry\Tests\Fake\TestQueuedJobService;
@@ -526,9 +526,8 @@ class EmbargoExpiryExtensionTest extends SapphireTest
 
         /** @var SiteTree|EmbargoExpiryExtension $page */
         $page = $this->objFromFixture(SiteTree::class, 'validateFail1');
-        $validationResult = new ValidationResult();
 
-        $page->extend('validate', $validationResult);
+        $validationResult = $page->validate();
 
         $this->assertFalse($validationResult->isValid());
     }
@@ -539,9 +538,8 @@ class EmbargoExpiryExtensionTest extends SapphireTest
 
         /** @var SiteTree|EmbargoExpiryExtension $page */
         $page = $this->objFromFixture(SiteTree::class, 'validateFail2');
-        $validationResult = new ValidationResult();
 
-        $page->extend('validate', $validationResult);
+        $validationResult = $page->validate();
 
         $this->assertFalse($validationResult->isValid());
     }

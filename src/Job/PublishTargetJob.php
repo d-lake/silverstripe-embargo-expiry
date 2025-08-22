@@ -2,7 +2,8 @@
 
 namespace Terraformers\EmbargoExpiry\Job;
 
-use Opis\Closure\SerializableClosure;
+use Closure;
+use function Opis\Closure\unserialize as o_unserialize;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Versioned\Versioned;
 use Symbiote\QueuedJobs\Services\AbstractQueuedJob;
@@ -14,9 +15,8 @@ use Terraformers\EmbargoExpiry\Job\State\ActionProcessingState;
  */
 class PublishTargetJob extends AbstractQueuedJob
 {
-
     /**
-     * @var DataObject
+     * @var DataObject|null
      */
     private $target; // phpcs:ignore SlevomatCodingStandard.TypeHints
 
@@ -43,10 +43,19 @@ class PublishTargetJob extends AbstractQueuedJob
         }
 
         if (is_array($this->options) && array_key_exists('onBeforeGetObject', $this->options)) {
-            $superClosure = $this->options['onBeforeGetObject'];
+            $cb = $this->options['onBeforeGetObject'];
 
-            if ($superClosure instanceof SerializableClosure) {
-                $superClosure->__invoke();
+            // Preferred in opis v4: stored as serialized string
+            if (is_string($cb)) {
+                try {
+                    $cb = o_unserialize($cb);
+                } catch (\Throwable $e) {
+                    $cb = null; // ignore bad payloads
+                }
+            }
+
+            if ($cb instanceof Closure) {
+                $cb();
             }
         }
 
@@ -64,7 +73,7 @@ class PublishTargetJob extends AbstractQueuedJob
             'Scheduled publishing of {object}',
             '',
             [
-                'object' => $target->Title,
+                'object' => $target ? $target->Title : '',
             ]
         );
     }
@@ -75,14 +84,12 @@ class PublishTargetJob extends AbstractQueuedJob
 
         if ($target === null) {
             $this->completeJob();
-
             return;
         }
 
         ActionProcessingState::singleton()->setActionIsProcessing(true);
 
-        // Make sure to use local variables for passing by reference as these are job properties
-        // which are manipulated via magic methods and these do not work with passing by reference directly
+        // Use local variable when passing by reference
         $options = $this->options;
         $target->invokeWithExtensions('prePublishTargetJob', $options);
         $this->options = $options;
@@ -91,10 +98,8 @@ class PublishTargetJob extends AbstractQueuedJob
         $target->writeWithoutVersion();
         $target->publishRecursive();
 
-        // Make sure to use local variables for passing by reference as these are job properties
-        // which are manipulated via magic methods and these do not work with passing by reference directly
+        // Use local variable when passing by reference
         $options = $this->options;
-        // This allows actions to occur after the publish job has run such as creating snapshots
         $target->invokeWithExtensions('afterPublishTargetJob', $options);
         $this->options = $options;
 

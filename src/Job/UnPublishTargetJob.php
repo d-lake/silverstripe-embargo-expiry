@@ -2,7 +2,8 @@
 
 namespace Terraformers\EmbargoExpiry\Job;
 
-use Opis\Closure\SerializableClosure;
+use Closure;
+use function Opis\Closure\unserialize as o_unserialize;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Versioned\Versioned;
 use Symbiote\QueuedJobs\Services\AbstractQueuedJob;
@@ -14,9 +15,8 @@ use Terraformers\EmbargoExpiry\Job\State\ActionProcessingState;
  */
 class UnPublishTargetJob extends AbstractQueuedJob
 {
-
     /**
-     * @var DataObject
+     * @var DataObject|null
      */
     private $target; // phpcs:ignore SlevomatCodingStandard.TypeHints
 
@@ -34,19 +34,28 @@ class UnPublishTargetJob extends AbstractQueuedJob
     }
 
     /**
-     * @return DataObject|Versioned|EmbargoExpiryExtension|null $obj
+     * @return DataObject|Versioned|EmbargoExpiryExtension|null
      */
-    public function getTarget()
+    public function getTarget() // phpcs:ignore SlevomatCodingStandard.TypeHints
     {
         if ($this->target !== null) {
             return $this->target;
         }
 
         if (is_array($this->options) && array_key_exists('onBeforeGetObject', $this->options)) {
-            $superClosure = $this->options['onBeforeGetObject'];
+            $cb = $this->options['onBeforeGetObject'];
 
-            if ($superClosure instanceof SerializableClosure) {
-                $superClosure->__invoke();
+            // In opis v4 this should be a serialized string; convert to a Closure
+            if (is_string($cb)) {
+                try {
+                    $cb = o_unserialize($cb);
+                } catch (\Throwable $e) {
+                    $cb = null;
+                }
+            }
+
+            if ($cb instanceof Closure) {
+                $cb();
             }
         }
 
@@ -67,7 +76,7 @@ class UnPublishTargetJob extends AbstractQueuedJob
             'Scheduled un-publishing of {object}',
             '',
             [
-                'object' => $target->Title,
+                'object' => $target ? $target->Title : '',
             ]
         );
     }
